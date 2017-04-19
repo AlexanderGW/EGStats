@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<link type="text/css" rel="stylesheet" href="style.css">
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans:400,600' rel='stylesheet' type='text/css'>
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+</head>
+<body>
+<div id="vail">Loading...</div>
+<div id="message"><div><div class="string">&nbsp;</div></div></div>
+	<div id="result" class="container"></div>
+	<script type="text/javascript"><!--
+	var EGStats = EGStats || {
+		urlAction: '',
+		action: '',
+		values: [],
+		cache: []
+	};
+
+	EGStats.renderGameResults = function( data ) {
+		var label = '';
+		var html = '<table><thead>';
+		for( var field in data[0] ) {
+			label = field.charAt(0).toUpperCase() + field.slice(1).replace( '_', ' ' );
+			html += '<th data-field="' + field + '">' + label + '</th>';
+		}
+		html += '</thead><tbody>';
+
+		for( var i in data ) {
+			html += '<tr>';
+			for( var field in data[ i ] )
+				html += this.handleDataField( field, data[ i ][ field ] );
+			html += '</tr>';
+		}
+
+		html += '</tbody></table>';
+
+		return html;
+	};
+
+	EGStats.numberLongToShort = function( value ) {
+		var millions, tenthousands = 0;
+		var longvalue = value;
+		value -= ( ( millions = Math.floor( value / 1000000 ) ) * 1000000 );
+		value -= ( ( tenthousands = Math.floor( value / 10000 ) ) * 10000 );
+
+		value = '';
+		if( millions > 0 )
+			if( tenthousands > 0 )
+				value += millions + '.' + ( tenthousands < 10 ? '0' + tenthousands : tenthousands ) + 'm';
+			else
+				value += millions + 'm';
+		else {
+			if( tenthousands > 0 )
+				value += tenthousands + '0k';
+			else
+				value = longvalue;
+		}
+		return value;
+	};
+
+	EGStats.getTeamLabel = function( value ) {
+		//console.log(typeof value);
+		if( typeof value == 'object' || typeof value == 'string' && value.length == 32 ) {
+			if( value == '4cc2141aabaf0ea3edd187c852c29936' )
+				return 'Spectators';
+			else
+				return 'Private frequency';
+		}
+
+		return 'Frequency ' + value;
+	};
+
+	EGStats.handleDataField = function( name, value ) {
+		if( typeof value != 'undefined' ) {
+			switch( name ) {
+				case 'summary' :
+					value = '<a href="#summary/' + value + '">' + value + '</a>';
+					break;
+				case 'player_name' :
+					value = '<a href="#player/' + this.uriHashEncode( value ) + ( ( this.urlAction == 'games' && typeof this.values[0] != 'undefined' ) ? '/' + this.values[0] : ( ( ( this.urlAction == 'player' || this.urlAction == 'squad' ) && typeof this.values[1] != 'undefined' ) ? '/' + this.values[1] : '' ) ) + '">' + value + '</a>';
+					break;
+				case 'squad_name' :
+					value = '<a href="#squad/' + this.uriHashEncode( value ) + ( ( this.urlAction == 'games' && typeof this.values[0] != 'undefined' ) ? '/' + this.values[0] : ( ( ( this.urlAction == 'player' || this.urlAction == 'squad' ) && typeof this.values[1] != 'undefined' ) ? '/' + this.values[1] : '' ) ) + '">' + value + '</a>';
+					break;
+				case 'game_id' :
+					value = '<a href="#game/' + value + '">' + value + '</a>';
+					break;
+				case 'winning_freq' :
+					value = ( typeof value != 'number' ? '<em>private</em>' : value );
+					break;
+				case 'arena' :
+					value = ( typeof value != 'number' ? value : 'Public ' + value );
+					break;
+				case 'duration' :
+					var hours, minutes, seconds = 0;
+					value -= ( ( hours = Math.floor( value / 3600 ) ) * 3600 );
+					value -= ( ( minutes = Math.floor( value / 60 ) ) * 60 );
+					seconds = value;
+					value = '';
+					if( hours > 0 )
+						value += hours + 'h';
+					if( minutes > 0 )
+						value += minutes + 'm';
+					value += seconds + 's';
+					break;
+				case 'jackpot' :
+					var shortvalue = this.numberLongToShort( value );
+					value = shortvalue + ' (' + value + ')';
+					break;
+				case 'points' :
+					var shortvalue = this.numberLongToShort( value );
+					value = shortvalue + ' (' + value + ')';
+					break;
+				case 'start_time' :
+				case 'end_time' :
+					//value = value.replace( /[0-9]{4}-[0-9]{2}-[0-9]{2} /g, '' );
+					value = value.replace( / /, '<br>' );
+					break;
+			}
+		} else
+			value = '';
+
+		return '<td data-field="' + name + '">' + value + '</td>';
+	};
+
+	EGStats.doRequest = function() {
+		if( !this.cacheExists() ) {
+			$.ajax({
+				url: 'ajax.php',
+				type: 'GET',
+				data: {
+					action: EGStats.action,
+					value: EGStats.values
+				},
+				dataType: 'json'
+			}).done( function( data ){
+				EGStats.setCache( data );
+			}).always( function(){
+				EGStats.handleRequest();
+			});
+		} else
+			EGStats.handleRequest();
+	};
+
+	EGStats.handleRequest = function(){
+		//if( this.cacheExists() ) {
+		$('#result').html('');
+		var data = this.getCache();
+		var html = '';
+
+		if( typeof data == 'undefined' )
+			$('#result').html( '<h1>No results</h1>' );
+		else {
+			switch( this.action ) {
+
+				// ###################################################################################
+
+				case 'getSummaries' :
+					html += this.renderGameResults( data );
+
+					$('#result').html( html );
+
+					break;
+
+				// ###################################################################################
+
+				case 'getSummary' :
+					html += '<h1>' + data['start'] + ' to ' + data['end'] + '</h1>';
+
+					html += '<h1>Player high scores</h1>';
+					html += this.renderGameResults( data['players']['points'] );
+
+					html += '<h1>Top 10 players</h1>';
+					html += this.renderGameResults( data['players']['ratio'] );
+
+					html += '<h1>Squad high scores</h1>';
+					html += this.renderGameResults( data['squads']['points'] );
+
+					html += '<h1>Top 10 squads</h1>';
+					html += this.renderGameResults( data['squads']['ratio'] );
+
+					html += '<h1>Top 10 games</h1>';
+					html += this.renderGameResults( data['games'] );
+
+					$('#result').html( html );
+
+					break;
+
+				// ###################################################################################
+
+				case 'getPlayer' :
+					var value = '';
+					html += '<h1>' + data['player']['name'] + '</h1><h2><a href="#squad/' + this.uriHashEncode( data['player']['squad_name'] ) + '">' + data['player']['squad_name'] + '</a></h2>' +
+					'<h1>' + ( typeof data['start'] == 'object' ? 'Most recent games' : ( data['start'] == data['end'] ? data['start'] : data['start'] + ' to ' + data['end'] ) ) + '</h1>';
+
+					html += '<h3>Games won</h3>';
+					if( typeof data['games']['won'] != 'undefined' ) {
+						html += this.renderGameResults( data['games']['won'] );
+					}
+
+					html += '<h3>Games lost</h3>';
+					if( typeof data['games']['lost'] != 'undefined' ) {
+						html += this.renderGameResults( data['games']['lost'] );
+					}
+
+					html += '<h3>Games participated</h3>';
+					if( typeof data['games']['participated'] != 'undefined' ) {
+						html += this.renderGameResults( data['games']['participated'] );
+					}
+
+					$('#result').html( html );
+
+					break;
+
+				// ###################################################################################
+
+				case 'getSquad' :
+					var value = '';
+					html += '<h1>' + data['squad']['name'] + '</h1>' +
+					'<h1>' + ( typeof data['start'] == 'object' ? 'Squad activity ' : ( data['start'] == data['end'] ? data['start'] : data['start'] + ' to ' + data['end'] ) ) + '</h1>';
+
+					html += '<h1>High scores</h1>';
+					html += this.renderGameResults( data['players']['points'] );
+
+					html += '<h1>Top player ratios</h1>';
+					html += this.renderGameResults( data['players']['ratio'] );
+
+					$('#result').html( html );
+
+					break;
+
+				// ###################################################################################
+
+				case 'getGamesByDate' :
+					var value = '';
+					html += '<h1>All games &ndash; ' + ( data['start'] == data['end'] ? data['start'] : data['start'] + ' to ' + data['end'] ) + '</h1>';
+					html += this.renderGameResults( data['games'] );
+
+					html += '<h1>High scores (all games) &ndash; ' + ( data['start'] == data['end'] ? data['start'] : data['start'] + ' to ' + data['end'] ) + '</h1>';
+					html += this.renderGameResults( data['players']['points'] );
+
+					html += '<h1>Top player ratios (by game) &ndash; ' + ( data['start'] == data['end'] ? data['start'] : data['start'] + ' to ' + data['end'] ) + '</h1>';
+					html += this.renderGameResults( data['players']['ratio'] );
+
+					$('#result').html( html );
+
+					break;
+
+				// ###################################################################################
+
+				case 'getGame' :
+					var date = data['game'][ 'start_time' ].replace( / [0-9]{2}:[0-9]{2}:[0-9]{2}/g, '' );
+					html += '<a href="#games/' + date + '">All games &ndash; ' + date + '</a>';
+
+					var player = lastFreq = '';
+
+					html += '<h1>Game #' + data['game']['game_id'] + '</h1>';
+
+					html += this.renderGameResults( new Array( data['game'] ) );
+
+					html += '<h2>Winners</h2><div class="players winners"><h3>' + this.getTeamLabel( data['game']['winning_freq'] ) + '</h3></div>';
+					html += '<h2>Losers</h2><div class="players losers"></div>';
+					html += '<h2>Participants</h2><div class="players participants"></div>';
+
+					$('#result').html( html );
+
+					for( var i in data['players']['winners'] ) {
+						player = '<div data-freq="' + data['players']['winners'][ i ]['freq'] + '" data-player-id="' + data['players']['winners'][ i ]['player_id'] + '" class="player">' +
+						'<h4><a href="#player/' + this.uriHashEncode( data['players']['winners'][ i ]['player_name'] ) + '">' + data['players']['winners'][ i ]['player_name'] + '</a></h4>' +
+						( data['players']['winners'][ i ]['squad_name'] ? '<h5><a href="#squad/' + this.uriHashEncode( data['players']['winners'][ i ]['squad_name'] ) + '">' + data['players']['winners'][ i ]['squad_name'] + '</a></h5>' : '<br>' ) +
+						'<div class="wlr"><span>' + data['players']['winners'][ i ]['wins'] + '</span><span>' + data['players']['winners'][ i ]['losses'] + '</span><span>' + data['players']['winners'][ i ]['teamkills'] + '</span><span>' + data['players']['winners'][ i ]['goals'] + '</span></div>' +
+						'<div class="points"><span>' + ( data['players']['winners'][ i ]['kill_points'] + data['players']['winners'][ i ]['flag_points'] + data['players']['winners'][ i ]['total_kothpoints'] ) + '</span></div>' +
+						'</div>';
+						$(player).appendTo('div.players.winners').hide().fadeIn(2000);
+					}
+
+					lastFreq = '';
+					for( var i in data['players']['losers'] ) {
+						player = ( ( data['players']['losers'][ i ]['freq'] != lastFreq || i == 0 ) ? '<h3>' + this.getTeamLabel( data['players']['losers'][ i ]['freq'] ) + '</h3>' : '' ) +
+						'<div data-freq="' + data['players']['losers'][ i ]['freq'] + '" data-player-id="' + data['players']['losers'][ i ]['player_id'] + '" class="player">' +
+						'<h4><a href="#player/' + this.uriHashEncode( data['players']['losers'][ i ]['player_name'] ) + '">' + data['players']['losers'][ i ]['player_name'] + '</a></h4>' +
+						( data['players']['losers'][ i ]['squad_name'] ? '<h5><a href="#squad/' + this.uriHashEncode( data['players']['losers'][ i ]['squad_name'] ) + '">' + data['players']['losers'][ i ]['squad_name'] + '</a></h5>' : '<br>' ) +
+						'<div class="wlr"><span>' + data['players']['losers'][ i ]['wins'] + '</span><span>' + data['players']['losers'][ i ]['losses'] + '</span><span>' + data['players']['losers'][ i ]['teamkills'] + '</span><span>' + data['players']['losers'][ i ]['goals'] + '</span></div>' +
+						'<div class="points"><span>' + ( data['players']['losers'][ i ]['kill_points'] + data['players']['losers'][ i ]['flag_points'] + data['players']['losers'][ i ]['total_kothpoints'] ) + '</span></div>' +
+						'</div>';
+						$(player).appendTo('div.players.losers').hide().fadeIn(2000);
+						lastFreq = data['players']['losers'][ i ]['freq'];
+					}
+
+					lastFreq = '';
+					for( var i in data['players']['participants'] ) {
+						player = ( ( data['players']['participants'][ i ]['freq'] != lastFreq || i == 0 ) ? '<h3>' + this.getTeamLabel( data['players']['participants'][ i ]['freq'] ) + '</h3>' : '' ) +
+						'<div data-freq="' + data['players']['participants'][ i ]['freq'] + '" data-player-id="' + data['players']['participants'][ i ]['player_id'] + '" class="player">' +
+						'<h4><a href="#player/' + this.uriHashEncode( data['players']['participants'][ i ]['player_name'] ) + '">' + data['players']['participants'][ i ]['player_name'] + '</a></h4>' +
+						( data['players']['participants'][ i ]['squad_name'] ? '<h5><a href="#squad/' + this.uriHashEncode( data['players']['participants'][ i ]['squad_name'] ) + '">' + data['players']['participants'][ i ]['squad_name'] + '</a></h5>' : '<br>' ) +
+						'<div class="wlr"><span>' + data['players']['participants'][ i ]['wins'] + '</span><span>' + data['players']['participants'][ i ]['losses'] + '</span><span>' + data['players']['participants'][ i ]['teamkills'] + '</span><span>' + data['players']['participants'][ i ]['goals'] + '</span></div>' +
+						'<div class="points"><span>' + ( data['players']['participants'][ i ]['kill_points'] + data['players']['participants'][ i ]['flag_points'] + data['players']['participants'][ i ]['total_kothpoints'] ) + '</span></div>' +
+						'</div>';
+						$(player).appendTo('div.players.participants').hide().fadeIn(2000);
+						lastFreq = data['players']['participants'][ i ]['freq'];
+					}
+
+					$('.player[data-player-id=' + data['players']['mvp'] + ']').addClass( 'mvp' );
+
+					break;
+			}
+		}
+
+		//}
+		$('#vail').fadeTo( 500, 0, function(){
+			$(this).hide();
+		});
+	};
+
+	EGStats.doUpdate = function(){
+		this.urlAction = 'summary';
+
+		if( window.location.hash ) {
+			this.values = window.location.hash.substr(1).split('/');
+			this.urlAction = this.values.shift();
+		}
+
+		console.log(this.urlAction);
+
+		if( $('#message').is( ':visible' ) )
+			$('#message').fadeTo( 500, 0, function(){
+				$(this).hide();
+			});
+
+		$('#vail').fadeTo( 500, 1, function(){
+			switch( EGStats.urlAction ) {
+				case 'summaries' :
+					EGStats.action = 'getSummaries';
+					EGStats.doRequest();
+					break;
+
+				case 'summary' :
+					EGStats.action = 'getSummary';
+					EGStats.doRequest();
+					break;
+
+				case 'games' :
+					EGStats.action = 'getGamesByDate';
+					EGStats.doRequest();
+					break;
+
+				case 'game' :
+					EGStats.action = 'getGame';
+					EGStats.doRequest();
+					break;
+
+				case 'player' :
+					EGStats.action = 'getPlayer';
+					EGStats.doRequest();
+					break;
+
+				case 'squad' :
+					EGStats.action = 'getSquad';
+					EGStats.doRequest();
+					break;
+
+				default :
+					$('#message .string').html('Unable to load the requested page.');
+					$('#message').fadeTo( 500, 1 );
+					break;
+			}
+		});
+	};
+
+	EGStats.getCacheKey = function() {
+		return this.action + ( this.values ? '_' + this.values.join( '_' ) : '' );
+	};
+
+	EGStats.cacheExists = function(){
+		var key = this.getCacheKey();
+		return false;//( typeof this.cache[ key ] != 'undefined' );
+	};
+
+	EGStats.getCache = function() {
+		var key = this.getCacheKey();
+		return this.cache[ key ];
+	};
+
+	EGStats.setCache = function( data ){
+		var key = this.getCacheKey();
+		this.cache[ key ] = data;
+	};
+
+	EGStats.uriHashEncode = function( value ){
+		value = encodeURI( value );
+		return value.replace( '/', '%47' );
+	};
+
+	$(document).ready( function(){
+		EGStats.doUpdate();
+	});
+
+	$(window).on( 'hashchange', function() {
+		EGStats.doUpdate();
+	});
+	//--></script>
+</body>
+</html>

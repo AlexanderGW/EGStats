@@ -1,0 +1,4 @@
+#Options +FollowSymLinks
+#RewriteEngine On
+#RewriteBase /egstats/
+#RewriteRule ^game.php?id=(.*) index.php#game/$2 [NE,R]
